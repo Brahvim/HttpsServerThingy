@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program",
+            "runtimeExecutable": "/home/brahvim/.nvm/versions/node/v20.15.1/bin/node",
+            "args": [
+                // "--experimental-top-level-await", // Don't need this for Node.js `14`+
+                "",
+            ],
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/src/back/server.mjs",
+        },
+    ],
+}
