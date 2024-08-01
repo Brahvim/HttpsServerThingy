@@ -4,6 +4,7 @@ import url from "node:url";
 import http from "node:http";
 
 const s_port = 8080;
+const s_endpoints = loadServerConfigJsonFile();
 let s_requestCount = 0;
 
 function failRequest(p_response, p_logTag, p_statusCode, p_message) {
@@ -11,6 +12,17 @@ function failRequest(p_response, p_logTag, p_statusCode, p_message) {
 	p_response.writeHead(404, "Content-Type", "text/plain");
 	console.error(p_logTag + message);
 	p_response.end(message);
+}
+
+function loadServerConfigJsonFile(p_fileNameNoExt) {
+	try {
+		const path = `./config/${p_fileNameNoExt}.json`;
+		const file = fs.readFileSync(path);
+		return JSON.parse(file);
+	} catch (e) {
+		console.error(`[SERVER] Failed to load JSON configuration file at \`${p_path}\`.`, e);
+		process.exit(1);
+	}
 }
 
 const s_server = http.createServer(async (p_request, p_response) => {
