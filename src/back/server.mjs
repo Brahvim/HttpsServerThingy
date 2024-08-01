@@ -7,13 +7,6 @@ const s_port = 8080;
 const s_endpoints = loadServerConfigJsonFile();
 let s_requestCount = 0;
 
-function failRequest(p_response, p_logTag, p_statusCode, p_message) {
-	const message = `\`${p_statusCode}\`! ${p_message}`;
-	p_response.writeHead(404, "Content-Type", "text/plain");
-	console.error(p_logTag + message);
-	p_response.end(message);
-}
-
 function loadServerConfigJsonFile(p_fileNameNoExt) {
 	try {
 		const path = `./config/${p_fileNameNoExt}.json`;
@@ -32,9 +25,25 @@ const s_server = http.createServer(async (p_request, p_response) => {
 
 	const requestLogTag = `[REQUEST #${requestNumber}] `;
 
+	function failRequest(p_statusCode, p_message) {
+		const message = `\`${p_statusCode}\`! ${p_message}`;
+		p_response.writeHead(404, "Content-Type", "text/html");
+		console.error(requestLogTag + message);
+		p_response.end(
+			`
+<body>
+<pre style="display: flex; align-items: center; text-align: center;">
+${message}
+<a href="/">Click here to go to the home page.</a>
+</pre>
+</body>
+`
+		);
+	}
+
 	fs.readFile(`./src/front/${httpPath}`, (p_error, p_data) => {
 		if (p_error) {
-			failRequest(p_response, requestLogTag, 404, "File not found.");
+			failRequest(404, "File not found.");
 			return;
 		}
 
@@ -56,19 +65,19 @@ const s_server = http.createServer(async (p_request, p_response) => {
 				methodImpl(requestNumber, httpArgs, p_request, p_response);
 			} // HTTP method implementation *threw up?:*
 			catch (p_error) {
-				failRequest(p_response, requestLogTag, 500, "Internal Server Error.");
+				failRequest(500, "Internal Server Error.");
 				console.error(requestLogTag + p_error);
 			}
 
 		} // HTTP method doesn't exist in module?:
 		catch (p_error) {
-			failRequest(p_response, requestLogTag, 405, `Method \`${httpMethod}\` Not Allowed.`);
+			failRequest(405, `Method \`${httpMethod}\` Not Allowed.`);
 			throw new Error(`Method not found in module \`${module}\`.`);
 		}
 	} // Module doesn't exist?!:
 	catch (p_error) {
 		console.error(`Module \`${module}\` not found.`, e);
-		failRequest(p_response, requestLogTag, 501, "Endpoint Not Implemented.");
+		failRequest(501, "Endpoint Not Implemented.");
 	}
 });
 
