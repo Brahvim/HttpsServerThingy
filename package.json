@@ -10,7 +10,6 @@
   "author": "Brahvim Bhaktvatsal",
   "license": "ISC",
   "dependencies": {
-    "https": "^1.0.0",
     "mime": "^4.0.4"
   }
 }
