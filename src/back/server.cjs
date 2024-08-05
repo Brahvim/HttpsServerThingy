@@ -34,30 +34,7 @@ const s_server = http.createServer(async (p_request, p_response) => {
 	}
 
 	try {
-		// See if the CJS version exists. If not, check for MJS.
-		// If not that, check for a JS tag. Else, we'll unwind the stack, we gotta' go back!:
-		const moduleType = fs.existsSync(`./endpoints/${httpPath}.cjs`)
-			? "cjs"
-			: fs.existsSync(`./endpoints/${httpPath}.mjs`)
-				? "mjs"
-				: fs.existsSync(`./endpoints/${httpPath}.js`)
-					? ((p_filePath) => {
-						try {
-							import(p_filePath);
-							return "mjs";
-						} catch (error) {
-							return error.code === 'ERR_REQUIRE_ESM'
-								? "cjs"
-								: null;
-						}
-					})(httpPath)
-					: null;
-
-		if (moduleType == null)
-			throw new Error(`[SERVER] Module "\`${httpPath}\`" doesn't exist in any supported formats (\`.mjs\`, \`.cjs\`, \`.js\`).`);
-
-		const modulePath = `./endpoints/${httpPath}.${moduleType}`;
-		const module = moduleType == "mjs" ? import(modulePath) : require(modulePath);
+		const module = loadEndpointModule(httpPath);
 
 		// Get the function implementing given HTTP method from said module!:
 		try {
@@ -134,7 +111,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 		// Time to re-import!:
 		delete require.cache[require.resolve("./endpoints" + p_fileName)];
-		async () => import("./endpoints" + p_fileName)();
+		(async () => import("./endpoints" + p_fileName))();
 
 		markModuleAsUnused(fileNameNoExt);
 		return;
@@ -145,7 +122,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 	// If we don't already have the file and it exists, add it:
 	if (id == -1 && fileExists) {
-		async () => import("./endpoints" + p_fileName)();
+		(async () => import("./endpoints" + p_fileName))();
 		s_endpointsPaths.push(p_fileName);
 		console.log(`[WATCHER] File \`${p_fileName}\` was added.`);
 	} else {
@@ -174,27 +151,8 @@ function isModuleUsed(p_moduleName) {
 // #endregion
 
 function loadEndpointModule(p_endpointName) {
-	const pathNoExt = `./endpoints/${p_endpointName}.`;
+	let type, module;
 
-	for (let e of ["mjs", "cjs"]) {
-		const path = pathNoExt + e;
-		if (fs.existsSync(path))
-			return { module: e === "mjs" ? import(path) : require(path), type: e };
-	}
-
-	const path = pathNoExt + "js";
-
-	try {
-		return { module: import(path), type: "mjs" };
-	} catch (error) {
-		if (error.code === "ERR_REQUIRE_ESM")
-			return { module: require(path), type: "cjs" };
-		throw new Error(`[SERVER] Module "${p_endpointName}" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
-	}
-}
-
-
-function loadEndpointModule2() {
 	const error = () => console.log(
 		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
 
@@ -202,15 +160,51 @@ function loadEndpointModule2() {
 		const path = `./endpoints/${p_endpointName}.${extension}`;
 
 		// For MJS:
-		try { return { module: import(path), type: "mjs" }; }
-		// For CJS and if no modules source file exists:
+		try {
+			type = "mjs";
+			module = import(path);
+			return { module, type };
+		} // For CJS and if no modules source file exists:
 		catch (p_error1) {
 			// We're on CommonJS. If something breaks, well, just error out:
-			if (p_error1.code !== "ERR_REQUIRE_ESM") { error(); return; }
+			if (p_error1.code === "ERR_REQUIRE_ESM") { error(); return; }
 
-			try { return { module: require(path), type: "cjs" }; }
+			try {
+				type = "cjs";
+				module = require(path);
+				return { module, type };
+			} // If no such module exists:
 			catch (p_error2) { error(); return; }
 		}
+	}
+}
+
+async function loadEndpointModule2(p_endpointName) {
+	let type, module;
+
+	const error = () => console.log(
+		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
+
+	for (const extension of ["mjs", "cjs", "js"]) {
+		const path = `./endpoints/${p_endpointName}.${extension}`;
+
+		// For MJS:
+		type = "mjs";
+		import(path)
+			.then((p_module) => module = p_module)
+			.catch((p_error1) => {
+				if (p_error1.code === "ERR_REQUIRE_ESM") {
+					error();
+					return;
+				}
+
+				type = "cjs";
+				require(path)
+					.then((p_module) => module = p_module)
+					.catch((p_error2) => error()); // ...If no such module's source code exists.
+			});
+
+		// return { module, type };
 	}
 }
 
