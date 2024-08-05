@@ -17,7 +17,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/src/back/server.mjs",
+            "program": "${workspaceFolder}/src/back/server.cjs",
         },
     ],
 }

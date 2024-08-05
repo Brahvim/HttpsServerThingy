@@ -1,15 +1,19 @@
-import mime from "mime";
-import fs from "node:fs";
-import url from "node:url";
-import http from "node:http";
+//#region Imports.
+// EJS modules:
+const mime = import("mime");
+
+// CommonJS modules:
+const fs = require("node:fs");
+const url = require("node:url");
+const http = require("node:http");
+//#endregion 
 
 const s_port = 8080;
 const s_server = http.createServer(async (p_request, p_response) => {
-	const httpArgs = url.parse(p_request.url, true);
 	const requestNumber = ++s_requestCount;
-	const httpPath = httpArgs.pathname == "/" ? "index" : httpArgs.pathname;
-
+	const httpArgs = url.parse(p_request.url, true);
 	const requestLogTag = `[REQUEST #${requestNumber}] `;
+	const httpPath = httpArgs.pathname == "/" ? "index" : httpArgs.pathname;
 
 	function failRequest(p_statusCode, p_message) {
 		const message = `\`${p_statusCode}\`! ${p_message}`;
@@ -29,8 +33,32 @@ const s_server = http.createServer(async (p_request, p_response) => {
 	}
 
 	try {
-		const modulePath = `./endpoints/${httpPath}.mjs`;
-		const module = await import(modulePath);
+		// See if the CJS version exists. If not, check for MJS.
+		// If not that either, check for JS. Else, we'll unwind the stack, we gotta' go back!:
+		const moduleType = fs.existsSync(`./endpoints/${httpPath}.cjs`)
+			? "cjs"
+			: fs.existsSync(`./endpoints/${httpPath}.mjs`)
+				? "mjs"
+				: fs.existsSync(`./endpoints/${httpPath}.js`)
+					? ((p_filePath) => {
+						try {
+							import(p_filePath);
+							console.log(`${p_filePath} is an ES Module`);
+						} catch (error) {
+							if (error.code === 'ERR_REQUIRE_ESM') {
+								console.log(`${p_filePath} is a CommonJS Module`);
+							} else {
+								console.error(`Error checking module type: ${error.message}`);
+							}
+						}
+					})(httpPath)
+					: null;
+
+		if (moduleType == null)
+			throw new Error(`[SERVER] Module "\`${httpPath}\`" doesn't exist in any supported formats (\`.mjs\`, \`.cjs\`, \`.js\`).`);
+
+		const modulePath = `./endpoints/${httpPath}.${moduleType}`;
+		const module = moduleType == "mjs" ? import(modulePath) : require(modulePath);
 
 		// Get the function implementing given HTTP method from said module!:
 		try {
@@ -89,16 +117,13 @@ const s_server = http.createServer(async (p_request, p_response) => {
 });
 const s_moduleLocks = new Map();
 const s_endpointsDir = "./src/back/endpoints/";
-const s_endpointsPaths = fs.readdirSync(s_endpointsDir).filter(p_fileName => p_fileName.endsWith(".mjs"));
-
-// May be used to reload CommonJS modules:
-/*
+const s_endpointsPaths = fs.readdirSync(s_endpointsDir).filter(p_fileName => p_fileName.includes("js"));
 const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
-	// Simultaneously extract the filename without the extension and check if it is a `.mjs` file:
+	// Simultaneously extract the filename without the extension and check if it is a `.cjs` file:
 	const dotId = p_fileName.lastIndexOf(".");
 	const fileExt = p_fileName.substring(dotId + 1);
 
-	if (fileExt !== "mjs")
+	if (!fileExt.includes("js"))
 		return;
 
 	const fileNameNoExt = p_fileName.substring(0, dotId);
@@ -110,7 +135,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 		// Time to re-import!:
 		delete require.cache[require.resolve("./endpoints" + p_fileName)];
-		import("./endpoints" + p_fileName);
+		async () => import("./endpoints" + p_fileName)();
 
 		markModuleAsUnused(fileNameNoExt);
 		return;
@@ -121,7 +146,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 	// If we don't already have the file and it exists, add it:
 	if (id == -1 && fileExists) {
-		import("./endpoints" + p_fileName);
+		async () => import("./endpoints" + p_fileName)();
 		s_endpointsPaths.push(p_fileName);
 		console.log(`[WATCHER] File \`${p_fileName}\` was added.`);
 	} else {
@@ -132,7 +157,6 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 	markModuleAsUnused(fileNameNoExt);
 });
-*/
 
 let s_requestCount = 0;
 
@@ -164,7 +188,7 @@ s_server.listen(s_port, async () => {
 
 	const loadedModules = [];
 	for (const modulePath of s_endpointsPaths) {
-		await import("./endpoints/" + modulePath);
+		import("./endpoints/" + modulePath);
 		loadedModules.push(modulePath);
 	}
 

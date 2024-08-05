@@ -1,4 +1,4 @@
-export async function get(p_response, p_requestNumber) {
+exports.get = async (p_response, p_requestNumber) => {
     p_response.writeHead(200, "Content-Type", "text/html");
     p_response.end(`
 <body>
