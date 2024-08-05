@@ -6,6 +6,7 @@ const mime = import("mime");
 const fs = require("node:fs");
 const url = require("node:url");
 const http = require("node:http");
+const { extname } = require("node:path");
 //#endregion 
 
 const s_port = 8080;
@@ -34,7 +35,7 @@ const s_server = http.createServer(async (p_request, p_response) => {
 
 	try {
 		// See if the CJS version exists. If not, check for MJS.
-		// If not that either, check for JS. Else, we'll unwind the stack, we gotta' go back!:
+		// If not that, check for a JS tag. Else, we'll unwind the stack, we gotta' go back!:
 		const moduleType = fs.existsSync(`./endpoints/${httpPath}.cjs`)
 			? "cjs"
 			: fs.existsSync(`./endpoints/${httpPath}.mjs`)
@@ -43,13 +44,11 @@ const s_server = http.createServer(async (p_request, p_response) => {
 					? ((p_filePath) => {
 						try {
 							import(p_filePath);
-							console.log(`${p_filePath} is an ES Module`);
+							return "mjs";
 						} catch (error) {
-							if (error.code === 'ERR_REQUIRE_ESM') {
-								console.log(`${p_filePath} is a CommonJS Module`);
-							} else {
-								console.error(`Error checking module type: ${error.message}`);
-							}
+							return error.code === 'ERR_REQUIRE_ESM'
+								? "cjs"
+								: null;
 						}
 					})(httpPath)
 					: null;
@@ -174,11 +173,64 @@ function isModuleUsed(p_moduleName) {
 }
 // #endregion
 
+function loadEndpointModule(p_endpointName) {
+	const pathNoExt = `./endpoints/${p_endpointName}.`;
+
+	for (let e of ["mjs", "cjs"]) {
+		const path = pathNoExt + e;
+		if (fs.existsSync(path))
+			return { module: e === "mjs" ? import(path) : require(path), type: e };
+	}
+
+	const path = pathNoExt + "js";
+
+	try {
+		return { module: import(path), type: "mjs" };
+	} catch (error) {
+		if (error.code === "ERR_REQUIRE_ESM")
+			return { module: require(path), type: "cjs" };
+		throw new Error(`[SERVER] Module "${p_endpointName}" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
+	}
+}
+
+
+function loadEndpointModule2() {
+	let type, module;
+
+	function error() {
+		console.log(`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
+	}
+
+	for (const extension of ["mjs", "cjs", "js"]) {
+		const path = `./endpoints/${p_endpointName}.${extension}`;
+
+		try {
+			import(path);
+			type = "mjs";
+		} catch (p_error1) {
+			if (p_error1.code !== "ERR_REQUIRE_ESM") {
+				error();
+				return;
+			}
+
+			try {
+				require(path);
+				type = "cjs";
+			} catch (p_error2) {
+				error();
+				return;
+			}
+		}
+	}
+
+	return { module, type };
+}
+
 function shutdown() {
 	console.log();
 	console.log(`[SERVER] Server has fully informed of its stop.`);
 	process.exit(0);
-};
+}
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
