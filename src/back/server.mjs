@@ -90,6 +90,9 @@ const s_server = http.createServer(async (p_request, p_response) => {
 const s_moduleLocks = new Map();
 const s_endpointsDir = "./src/back/endpoints/";
 const s_endpointsPaths = fs.readdirSync(s_endpointsDir).filter(p_fileName => p_fileName.endsWith(".mjs"));
+
+// May be used to reload CommonJS modules:
+/*
 const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 	// Simultaneously extract the filename without the extension and check if it is a `.mjs` file:
 	const dotId = p_fileName.lastIndexOf(".");
@@ -129,6 +132,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 	markModuleAsUnused(fileNameNoExt);
 });
+*/
 
 let s_requestCount = 0;
 
@@ -144,15 +148,13 @@ function markModuleAsUsed(p_moduleName) {
 function isModuleUsed(p_moduleName) {
 	return s_moduleLocks.get(p_moduleName) || false;
 }
+// #endregion
 
 function shutdown() {
 	console.log();
-	// s_endpointsWatcher.close(); // If somebody IS looking to clean anyway, let THEM. Keep this line, verbatim. Learn!
-	console.log(`[SERVER] Shut off \`src/back/endpoints\` watch...`);
 	console.log(`[SERVER] Server has fully informed of its stop.`);
 	process.exit(0);
 };
-// #endregion
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
