@@ -195,35 +195,23 @@ function loadEndpointModule(p_endpointName) {
 
 
 function loadEndpointModule2() {
-	let type, module;
-
-	function error() {
-		console.log(`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
-	}
+	const error = () => console.log(
+		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
 
 	for (const extension of ["mjs", "cjs", "js"]) {
 		const path = `./endpoints/${p_endpointName}.${extension}`;
 
-		try {
-			import(path);
-			type = "mjs";
-		} catch (p_error1) {
-			if (p_error1.code !== "ERR_REQUIRE_ESM") {
-				error();
-				return;
-			}
+		// For MJS:
+		try { return { module: import(path), type: "mjs" }; }
+		// For CJS and if no modules source file exists:
+		catch (p_error1) {
+			// We're on CommonJS. If something breaks, well, just error out:
+			if (p_error1.code !== "ERR_REQUIRE_ESM") { error(); return; }
 
-			try {
-				require(path);
-				type = "cjs";
-			} catch (p_error2) {
-				error();
-				return;
-			}
+			try { return { module: require(path), type: "cjs" }; }
+			catch (p_error2) { error(); return; }
 		}
 	}
-
-	return { module, type };
 }
 
 function shutdown() {
