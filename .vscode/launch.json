@@ -9,6 +9,7 @@
             "request": "launch",
             "name": "Launch Program",
             "runtimeExecutable": "/home/brahvim/.nvm/versions/node/v20.15.1/bin/node",
+            // "runtimeExecutable": "node",
             "args": [
                 // "--experimental-top-level-await", // Don't need this for Node.js `14`+
                 "",
