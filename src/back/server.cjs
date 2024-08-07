@@ -6,7 +6,6 @@ const mime = import("mime");
 const fs = require("node:fs");
 const url = require("node:url");
 const http = require("node:http");
-const { extname } = require("node:path");
 //#endregion 
 
 const s_port = 8080;
@@ -99,7 +98,7 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 	const dotId = p_fileName.lastIndexOf(".");
 	const fileExt = p_fileName.substring(dotId + 1);
 
-	if (!fileExt.includes("js"))
+	if (!(fileExt == "cjs" || fileExt === "js"))
 		return;
 
 	const fileNameNoExt = p_fileName.substring(0, dotId);
@@ -110,8 +109,8 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 		console.log(`[WATCHER] File \`${p_fileName}\` was changed.`);
 
 		// Time to re-import!:
-		delete require.cache[require.resolve("./endpoints" + p_fileName)];
-		(async () => import("./endpoints" + p_fileName))();
+		delete require.cache[require.resolve("./endpoints/" + p_fileName)];
+		(async () => import("./endpoints/" + p_fileName))();
 
 		markModuleAsUnused(fileNameNoExt);
 		return;
@@ -122,11 +121,11 @@ const s_endpointsWatcher = fs.watch(s_endpointsDir, (p_event, p_fileName) => {
 
 	// If we don't already have the file and it exists, add it:
 	if (id == -1 && fileExists) {
-		(async () => import("./endpoints" + p_fileName))();
+		(async () => import("./endpoints/" + p_fileName))();
 		s_endpointsPaths.push(p_fileName);
 		console.log(`[WATCHER] File \`${p_fileName}\` was added.`);
 	} else {
-		delete require.cache[require.resolve("./endpoints" + p_fileName)];
+		delete require.cache[require.resolve("./endpoints/" + p_fileName)];
 		s_endpointsPaths.splice(id, 1);
 		console.log(`[WATCHER] File \`${p_fileName}\` was removed.`);
 	}
@@ -151,60 +150,24 @@ function isModuleUsed(p_moduleName) {
 // #endregion
 
 function loadEndpointModule(p_endpointName) {
-	let type, module;
-
 	const error = () => console.log(
-		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
+		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (\`.cjs\`, \`.js\`).`
+	);
 
-	for (const extension of ["mjs", "cjs", "js"]) {
-		const path = `./endpoints/${p_endpointName}.${extension}`;
+	// Try loading the file with the `.js` extension:
+	try {
+		return require(`./endpoints/${p_endpointName}.js`);
+	} // Try loading the file with the `.cjs` extension:
+	catch (p_error1) {
+		if (p_error1.code !== "MODULE_NOT_FOUND")
+			return undefined;
 
-		// For MJS:
 		try {
-			type = "mjs";
-			module = import(path);
-			return { module, type };
-		} // For CJS and if no modules source file exists:
-		catch (p_error1) {
-			// We're on CommonJS. If something breaks, well, just error out:
-			if (p_error1.code === "ERR_REQUIRE_ESM") { error(); return; }
-
-			try {
-				type = "cjs";
-				module = require(path);
-				return { module, type };
-			} // If no such module exists:
-			catch (p_error2) { error(); return; }
+			return require(`./endpoints/${p_endpointName}.cjs`);
+		} catch {
+			error();
+			return undefined;
 		}
-	}
-}
-
-async function loadEndpointModule2(p_endpointName) {
-	let type, module;
-
-	const error = () => console.log(
-		`[SERVER] Module "\`${p_endpointName}\`" doesn't exist in any supported formats (.mjs, .cjs, .js).`);
-
-	for (const extension of ["mjs", "cjs", "js"]) {
-		const path = `./endpoints/${p_endpointName}.${extension}`;
-
-		// For MJS:
-		type = "mjs";
-		import(path)
-			.then((p_module) => module = p_module)
-			.catch((p_error1) => {
-				if (p_error1.code === "ERR_REQUIRE_ESM") {
-					error();
-					return;
-				}
-
-				type = "cjs";
-				require(path)
-					.then((p_module) => module = p_module)
-					.catch((p_error2) => error()); // ...If no such module's source code exists.
-			});
-
-		// return { module, type };
 	}
 }
 
